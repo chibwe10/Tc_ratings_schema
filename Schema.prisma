@@ -1,6 +1,6 @@
 // ------------------------------------------------------------------
-// Full merged Prisma schema (Option A - renamed conflicting models)
-// Source: merged from 4 provided schemas
+// Full merged Prisma schema
+// Source: extracted from ratings calculation service 
 // ------------------------------------------------------------------
 
 generator client {
@@ -9,7 +9,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url      = env("postgresql://postgres:[096706a20B@]@db.onjipgxpenkfbzmzptyw.supabase.co:5432/postgres")
 }
 
 //
