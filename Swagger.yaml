@@ -1,0 +1,245 @@
+openapi: 3.0.3
+info:
+  title: Topcoder API
+  version: 1.0.0
+  description: API for Topcoder-style competitions, submissions, ratings, and coder streaks.
+
+servers:
+  - url: http://localhost:3000/api
+    description: Local development server
+
+paths:
+  /coders:
+    get:
+      summary: Get all coders
+      responses:
+        '200':
+          description: List of coders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Coder'
+    post:
+      summary: Create a new coder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Coder'
+      responses:
+        '201':
+          description: Coder created successfully
+
+  /coders/{coderId}:
+    get:
+      summary: Get a single coder by ID
+      parameters:
+        - in: path
+          name: coderId
+          schema:
+            type: integer
+          required: true
+          description: Numeric ID of the coder to get
+      responses:
+        '200':
+          description: Coder found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Coder'
+        '404':
+          description: Coder not found
+
+  /rounds:
+    get:
+      summary: Get all rounds
+      responses:
+        '200':
+          description: List of rounds
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Round'
+
+  /submissions:
+    get:
+      summary: Get all submissions
+      responses:
+        '200':
+          description: List of submissions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Submission'
+    post:
+      summary: Create a submission
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Submission'
+      responses:
+        '201':
+          description: Submission created successfully
+
+  /ratings:
+    get:
+      summary: Get all ratings
+      responses:
+        '200':
+          description: List of ratings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Rating'
+
+components:
+  schemas:
+    Coder:
+      type: object
+      properties:
+        id:
+          type: integer
+        handle:
+          type: string
+        countryCode:
+          type: string
+        stateCode:
+          type: string
+        ratings:
+          type: array
+          items:
+            $ref: '#/components/schemas/CoderRating'
+        submissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Submission'
+
+    CoderRating:
+      type: object
+      properties:
+        id:
+          type: integer
+        coderId:
+          type: integer
+        rating:
+          type: integer
+        schoolId:
+          type: integer
+        active:
+          type: boolean
+        countryCode:
+          type: string
+        stateCode:
+          type: string
+
+    Round:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        type:
+          $ref: '#/components/schemas/RoundType'
+        startDate:
+          type: string
+          format: date-time
+        endDate:
+          type: string
+          format: date-time
+        submissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Submission'
+
+    Submission:
+      type: object
+      properties:
+        id:
+          type: integer
+        coderId:
+          type: integer
+        roundId:
+          type: integer
+        problemId:
+          type: integer
+        score:
+          type: number
+        time:
+          type: string
+          format: date-time
+        status:
+          $ref: '#/components/schemas/SubmissionStatus'
+
+    Rating:
+      type: object
+      properties:
+        id:
+          type: integer
+        coderId:
+          type: integer
+        rating:
+          type: integer
+        volatility:
+          type: integer
+        type:
+          $ref: '#/components/schemas/RatingType'
+        timestamp:
+          type: string
+          format: date-time
+
+    StreakRow:
+      type: object
+      properties:
+        id:
+          type: integer
+        coderId:
+          type: integer
+        streakType:
+          $ref: '#/components/schemas/StreakType'
+        startRoundId:
+          type: integer
+        endRoundId:
+          type: integer
+        length:
+          type: integer
+        isCurrent:
+          type: boolean
+
+    SubmissionStatus:
+      type: string
+      enum:
+        - PASSED
+        - FAILED
+        - CHALLENGED
+
+    RoundType:
+      type: string
+      enum:
+        - MARATHON
+        - SRM
+
+    RatingType:
+      type: string
+      enum:
+        - MARATHON
+        - SRM
+
+    StreakType:
+      type: string
+      enum:
+        - MARATHON_RATING_INCREASE
+        - MARATHON_RATING_INCREASE_ALL
+        - MARATHON_CONSECUTIVE_TOP_5
+        - MARATHON_CONSECUTIVE_TOP_10
