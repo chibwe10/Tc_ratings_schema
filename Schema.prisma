@@ -1,0 +1,729 @@
+// ------------------------------------------------------------------
+// Full merged Prisma schema (Option A - renamed conflicting models)
+// Source: merged from 4 provided schemas
+// ------------------------------------------------------------------
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+//
+// Enums (from schema 4)
+//
+enum SubmissionStatus {
+  PASSED
+  FAILED
+  CHALLENGED
+}
+
+enum RoundType {
+  MARATHON
+  SRM
+}
+
+enum RatingType {
+  MARATHON
+  SRM
+}
+
+enum StreakType {
+  MARATHON_RATING_INCREASE
+  MARATHON_RATING_INCREASE_ALL
+  MARATHON_CONSECUTIVE_TOP_5
+  MARATHON_CONSECUTIVE_TOP_10
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// 1) OLTP models (suffix: _OLTP)
+///////////////////////////////////////////////////////////////////////////////
+model User_OLTP {
+  userId          Int               @id @map("userId")
+  firstName       String
+  lastName        String
+  middleName      String?
+  activationCode  String?
+  handle          String
+  status          String
+  createDate      DateTime
+  lastSiteHitDate DateTime?
+  regSource       String?
+  utmSource       String?
+  utmMedium       String?
+  utmCampaign     String?
+  modifyDate      DateTime
+
+  emails          Email_OLTP[]
+  addresses       UserAddressXref_OLTP[]
+  coderLink       Coder_DW?         @relation(fields: [userId], references: [coderId])
+
+  @@map("user")
+}
+
+model Email_OLTP {
+  userId     Int
+  address    String
+  primaryInd Boolean
+  modifyDate DateTime
+
+  user       User_OLTP @relation(fields: [userId], references: [userId])
+
+  @@id([userId, address])
+  @@index([primaryInd])
+  @@map("email")
+}
+
+model Address_OLTP {
+  addressId     Int      @id
+  address1      String?
+  address2      String?
+  city          String?
+  zip           String?
+  addressTypeId Int
+  stateCode     String?
+  countryCode   String?
+  modifyDate    DateTime
+
+  userLinks     UserAddressXref_OLTP[]
+
+  @@map("address")
+}
+
+model UserAddressXref_OLTP {
+  userId    Int
+  addressId Int
+
+  user      User_OLTP @relation(fields: [userId], references: [userId])
+  address   Address_OLTP @relation(fields: [addressId], references: [addressId])
+
+  @@id([userId, addressId])
+  @@map("user_address_xref")
+}
+
+model UpdateLog_OLTP {
+  logId     Int      @id @default(autoincrement()) @map("log_id")
+  logTypeId Int      @map("log_type_id")
+  timestamp DateTime
+
+  @@map("update_log")
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// 2) Data Warehouse / Ratings (suffix: _DW)
+///////////////////////////////////////////////////////////////////////////////
+
+model State_DW {
+  stateCode  String   @id @map("state_code")
+  stateName  String   @map("state_name")
+  modifyDate DateTime @map("modify_date")
+  createdAt  DateTime @default(now())
+  createdBy  String?  @db.VarChar(100)
+  updatedAt  DateTime @updatedAt
+  updatedBy  String?
+
+  @@map("state")
+}
+
+model Country_DW {
+  countryCode   String   @id @map("country_code")
+  countryName   String   @map("country_name")
+  participating Int
+  modifyDate    DateTime @map("modify_date")
+  createdAt     DateTime @default(now())
+  createdBy     String?  @db.VarChar(100)
+  updatedAt     DateTime @updatedAt
+  updatedBy     String?
+
+  @@map("country")
+}
+
+model Coder_DW {
+  coderId         Int      @id @map("coder_id")
+  stateCode       String?  @map("state_code")
+  countryCode     String?  @map("country_code")
+  firstName       String   @map("first_name")
+  lastName        String   @map("last_name")
+  address1        String?  @map("address1")
+  address2        String?  @map("address2")
+  city            String?  @map("city")
+  zip             String?  @map("zip")
+  middleName      String?  @map("middle_name")
+  activationCode  String?  @map("activation_code")
+  memberSince     DateTime?@map("member_since")
+  quote           String?  @map("quote")
+  languageId      Int?     @map("language_id")
+  coderTypeId     Int?     @map("coder_type_id")
+  handle          String
+  status          String
+  email           String?  // from joined email table
+  compCountryCode String?  @map("comp_country_code")
+  lastSiteHitDate DateTime?@map("last_site_hit_date")
+  regSource       String?  @map("reg_source")
+  utmSource       String?  @map("utm_source")
+  utmMedium       String?  @map("utm_medium")
+  utmCampaign     String?  @map("utm_campaign")
+  createDate      DateTime @map("create_date")
+  modifyDate      DateTime @map("modify_date")
+
+  // relations
+  user            User_OLTP? @relation(fields: [coderId], references: [userId])
+  submissions     Submission_DW[]
+  ratings         Rating_DW[]
+  marathonRatings MarathonCoderRating_DW[]
+
+  @@map("coder")
+  @@index([handle])
+  @@index([modifyDate])
+}
+
+model SkillType_DW {
+  skillTypeId    Int      @id @map("skill_type_id")
+  skillTypeDesc  String   @map("skill_type_desc")
+  skillTypeOrder Int      @map("skill_type_order")
+  status         String
+  modifyDate     DateTime @map("modify_date")
+
+  @@map("skill_type")
+}
+
+model SkillTypeLu_DW {
+  skillTypeId    Int      @id @map("skill_type_id")
+  skillTypeDesc  String   @map("skill_type_desc")
+  skillTypeOrder Int      @map("skill_type_order")
+  status         String
+  modifyDate     DateTime @map("modify_date")
+
+  @@map("skill_type_lu")
+}
+
+model MarathonCoderRating_DW {
+  id          Int      @id @default(autoincrement())
+  coderId     Int      @map("coder_id")
+  rating      Int
+  schoolId    Int?
+  active      Boolean  @default(true)
+  countryCode String?
+  stateCode   String?
+  createdAt   DateTime @default(now())
+  createdBy   String?  @db.VarChar(100)
+  updatedAt   DateTime @updatedAt
+  updatedBy   String?
+
+  coder       Coder_DW @relation(fields: [coderId], references: [coder_id])
+
+  @@index([rating])
+  @@index([schoolId])
+  @@index([countryCode, stateCode])
+  @@map("marathon_coder_rating")
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// 3) Contest/Problem domain (suffix: _CONTEST)
+///////////////////////////////////////////////////////////////////////////////
+
+model Contest_CONTEST {
+  contestId Int      @id @map("contest_id")
+  name      String
+  startDate DateTime? @map("start_date")
+  endDate   DateTime? @map("end_date")
+  status    String? 
+  groupId   Int?     @map("group_id")
+
+  rounds    Round_CONTEST[] @relation("contestRounds")
+
+  // audit
+  createdBy String?   @db.VarChar(100)
+  createdAt DateTime? @default(now())
+  updatedBy String?   @db.VarChar(100)
+  updatedAt DateTime? @updatedAt
+
+  @@index([startDate])
+  @@map("contest")
+}
+
+model Round_CONTEST {
+  roundId       Int      @id @map("round_id")
+  contestId     Int?     @map("contest_id")
+  name          String?
+  status        String?
+  calendarId    Int?     @map("calendar_id")
+  failed        Int?     @default(0)
+  roundTypeId   Int?     @map("round_type_id")
+  invitational  Int?
+  notes         String?  @db.Text
+  roundTypeDesc String?  @map("round_type_desc")
+  shortName     String?  @map("short_name")
+  forumId       Int?     @map("forum_id")
+  ratedInd      Int?     @map("rated_ind")
+  timeId        Int?     @map("time_id")
+  ratingOrder   Int?     @map("rating_order")
+  startDate     DateTime? @map("start_date")
+  endDate       DateTime? @map("end_date")
+
+  contest       Contest_CONTEST? @relation("contestRounds", fields: [contestId], references: [contestId], onDelete: Cascade)
+  components    RoundComponent_CONTEST[]
+  submissions   Submission_CONTEST[]
+  ratings       Rating_CONTEST[]
+
+  // audit
+  createdBy String?   @db.VarChar(100)
+  createdAt DateTime? @default(now())
+  updatedBy String?   @db.VarChar(100)
+  updatedAt DateTime? @updatedAt
+
+  @@index([roundTypeId])
+  @@index([ratedInd])
+  @@map("round")
+}
+
+model RoundTypeLu_CONTEST {
+  roundTypeId      Int     @id @map("round_type_id")
+  roundTypeDesc    String? @map("round_type_desc")
+  algoRatingTypeId Int?    @map("algo_rating_type_id")
+
+  // audit
+  createdBy String?   @db.VarChar(100)
+  createdAt DateTime? @default(now())
+  updatedBy String?   @db.VarChar(100)
+  updatedAt DateTime? @updatedAt
+
+  @@map("round_type_lu")
+}
+
+model RoundComponent_CONTEST {
+  id          Int       @id @default(autoincrement())
+  roundId     Int       @map("round_id")
+  componentId Int       @map("component_id")
+  divisionId  Int?      @map("division_id")
+  points      Float?
+
+  round       Round_CONTEST  @relation(fields: [roundId], references: [roundId], onDelete: Cascade)
+  component   Component_CONTEST @relation(fields: [componentId], references: [componentId], onDelete: Cascade)
+
+  createdBy String?   @db.VarChar(100)
+  createdAt DateTime? @default(now())
+  updatedBy String?   @db.VarChar(100)
+  updatedAt DateTime? @updatedAt
+
+  @@index([roundId])
+  @@index([componentId])
+  @@map("round_component")
+}
+
+model Component_CONTEST {
+  componentId     Int      @id @map("component_id")
+  methodName      String?  @map("method_name")
+  className       String?  @map("class_name")
+  defaultSolution String?  @map("default_solution")
+  componentText   String?  @map("component_text")
+  resultTypeId    Int?     @map("result_type_id")
+
+  problems        Problem_CONTEST[] @relation("componentProblems")
+
+  createdBy String?   @db.VarChar(100)
+  createdAt DateTime? @default(now())
+  updatedBy String?   @db.VarChar(100)
+  updatedAt DateTime? @updatedAt
+
+  @@map("component")
+}
+
+model Problem_CONTEST {
+  problemId       Int      @id @map("problem_id")
+  statusId        Int?     @map("status_id")
+  defaultSolution String?  @map("default_solution")
+  componentText   String?  @map("component_text")
+  resultTypeId    Int?     @map("result_type_id")
+  difficultyId    Int?     @map("difficulty_id")
+  divisionId      Int?     @map("division_id")
+  points          Float?
+
+  components      Component_CONTEST[] @relation("componentProblems", references: [componentId])
+  categories      ProblemCategoryXref_CONTEST[]
+  systemTestCases SystemTestCase_CONTEST[]
+  longSubmissions LongProblemSubmission_CONTEST[]
+  longResults     LongCompResult_CONTEST[]
+
+  createdBy String?   @db.VarChar(100)
+  createdAt DateTime? @default(now())
+  updatedBy String?   @db.VarChar(100)
+  updatedAt DateTime? @updatedAt
+
+  @@map("problem")
+}
+
+model ProblemCategoryXref_CONTEST {
+  id         Int     @id @default(autoincrement())
+  problemId  Int     @map("problem_id")
+  categoryId Int     @map("category_id")
+
+  problem    Problem_CONTEST @relation(fields: [problemId], references: [problemId], onDelete: Cascade)
+
+  createdBy String?   @db.VarChar(100)
+  createdAt DateTime? @default(now())
+  updatedBy String?   @db.VarChar(100)
+  updatedAt DateTime? @updatedAt
+
+  @@index([problemId])
+  @@map("problem_category_xref")
+}
+
+model LongCompResult_CONTEST {
+  id        Int    @id @default(autoincrement())
+  roundId   Int    @map("round_id")
+  data      Json?
+
+  createdBy String?   @db.VarChar(100)
+  createdAt DateTime? @default(now())
+  updatedBy String?   @db.VarChar(100)
+  updatedAt DateTime? @updatedAt
+
+  @@index([roundId])
+  @@map("long_comp_result")
+}
+
+model LongProblemSubmission_CONTEST {
+  id        Int    @id @default(autoincrement())
+  roundId   Int    @map("round_id")
+  data      Json?
+
+  createdBy String?   @db.VarChar(100)
+  createdAt DateTime? @default(now())
+  updatedBy String?   @db.VarChar(100)
+  updatedAt DateTime? @updatedAt
+
+  @@index([roundId])
+  @@map("long_problem_submission")
+}
+
+model LongSystemTestResult_CONTEST {
+  id        Int    @id @default(autoincrement())
+  roundId   Int    @map("round_id")
+  data      Json?
+
+  createdBy String?   @db.VarChar(100)
+  createdAt DateTime? @default(now())
+  updatedBy String?   @db.VarChar(100)
+  updatedAt DateTime? @updatedAt
+
+  @@index([roundId])
+  @@map("long_system_test_result")
+}
+
+model SystemTestCase_CONTEST {
+  id        Int    @id @default(autoincrement())
+  problemId Int    @map("problem_id")
+  input     Bytes?
+  output    Bytes?
+
+  createdBy String?   @db.VarChar(100)
+  createdAt DateTime? @default(now())
+  updatedBy String?   @db.VarChar(100)
+  updatedAt DateTime? @updatedAt
+
+  problem   Problem_CONTEST @relation(fields: [problemId], references: [problemId], onDelete: Cascade)
+
+  @@index([problemId])
+  @@map("system_test_case")
+}
+
+model DataType_CONTEST {
+  dataTypeId   Int    @id @map("data_type_id")
+  dataTypeDesc String? @map("data_type_desc")
+
+  createdBy String?   @db.VarChar(100)
+  createdAt DateTime? @default(now())
+  updatedBy String?   @db.VarChar(100)
+  updatedAt DateTime? @updatedAt
+
+  @@map("data_type")
+}
+
+model Difficulty_CONTEST {
+  difficultyId   Int    @id @map("difficulty_id")
+  difficultyDesc String? @map("difficulty_desc")
+
+  createdBy String?   @db.VarChar(100)
+  createdAt DateTime? @default(now())
+  updatedBy String?   @db.VarChar(100)
+  updatedAt DateTime? @updatedAt
+
+  @@map("difficulty")
+}
+
+model Calendar_CONTEST {
+  calendarId Int     @id @map("calendar_id")
+  startDate  DateTime?
+
+  createdBy String?   @db.VarChar(100)
+  createdAt DateTime? @default(now())
+  updatedBy String?   @db.VarChar(100)
+  updatedAt DateTime? @updatedAt
+
+  @@map("calendar")
+}
+
+model Time_CONTEST {
+  timeId    Int    @id @map("time_id")
+  timeValue Int?
+
+  createdBy String?   @db.VarChar(100)
+  createdAt DateTime? @default(now())
+  updatedBy String?   @db.VarChar(100)
+  updatedAt DateTime? @updatedAt
+
+  @@map("time")
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// 4) Algo / Ranking models (suffix: _ALGO)
+///////////////////////////////////////////////////////////////////////////////
+
+model coder_ALGO {
+  coder_id         BigInt    @id
+  coder_type_id    Int
+  comp_country_code String?
+  state_code        String?
+  status            String    @default("A")
+
+  rating_history   algo_rating_history_ALGO[]
+  current_school   current_school_ALGO?
+}
+
+model current_school_ALGO {
+  coder_id  BigInt @id
+  school_id Int?
+
+  coder     coder_ALGO @relation(fields: [coder_id], references: [coder_id])
+}
+
+model algo_rating_history_ALGO {
+  coder_id            BigInt
+  round_id            Int
+  algo_rating_type_id Int
+  rating              Int
+  num_ratings         Int
+
+  coder coder_ALGO @relation(fields: [coder_id], references: [coder_id])
+  round round_ALGO @relation(fields: [round_id], references: [round_id])
+
+  @@id([coder_id, round_id, algo_rating_type_id])
+}
+
+model long_comp_result_ALGO {
+  coder_id  BigInt
+  round_id  Int
+  attended  String
+  rated_ind Int
+
+  round round_ALGO @relation(fields: [round_id], references: [round_id])
+
+  @@id([coder_id, round_id])
+}
+
+model room_result_ALGO {
+  coder_id   BigInt
+  round_id   Int
+  attended   String
+  rated_flag Int
+
+  round round_ALGO @relation(fields: [round_id], references: [round_id])
+
+  @@id([coder_id, round_id])
+}
+
+model round_ALGO {
+  round_id      Int     @id
+  calendar_id   Int
+  round_type_id Int
+
+  calendar calendar_ALGO @relation(fields: [calendar_id], references: [calendar_id])
+  type     round_type_lu_ALGO @relation(fields: [round_type_id], references: [round_type_id])
+
+  algo_rating_history algo_rating_history_ALGO[]
+  long_comp_result    long_comp_result_ALGO[]
+  room_results        room_result_ALGO[]
+}
+
+model round_type_lu_ALGO {
+  round_type_id       Int @id
+  algo_rating_type_id Int
+}
+
+model calendar_ALGO {
+  calendar_id Int @id
+  date        DateTime
+}
+
+model coder_rank_ALGO {
+  coder_id            BigInt
+  percentile          Float
+  rank                Int
+  coder_rank_type_id  Int
+  algo_rating_type_id Int
+
+  @@id([coder_id, coder_rank_type_id, algo_rating_type_id])
+}
+
+model coder_rank_history_ALGO {
+  coder_id            BigInt
+  round_id            Int
+  percentile          Float
+  rank                Int
+  coder_rank_type_id  Int
+  algo_rating_type_id Int
+
+  @@id([coder_id, round_id, coder_rank_type_id, algo_rating_type_id])
+}
+
+model country_coder_rank_ALGO {
+  coder_id            BigInt
+  percentile          Float
+  rank                Int
+  rank_no_tie         Int
+  country_code        String
+  coder_rank_type_id  Int
+  algo_rating_type_id Int
+
+  @@id([coder_id, country_code, coder_rank_type_id, algo_rating_type_id])
+}
+
+model state_coder_rank_ALGO {
+  coder_id            BigInt
+  percentile          Float
+  rank                Int
+  rank_no_tie         Int
+  state_code          String
+  coder_rank_type_id  Int
+  algo_rating_type_id Int
+
+  @@id([coder_id, state_code, coder_rank_type_id, algo_rating_type_id])
+}
+
+model school_coder_rank_ALGO {
+  coder_id            BigInt
+  percentile          Float
+  rank                Int
+  rank_no_tie         Int
+  school_id           Int
+  coder_rank_type_id  Int
+  algo_rating_type_id Int
+
+  @@id([coder_id, school_id, coder_rank_type_id, algo_rating_type_id])
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// 5) App-level consolidated models (suffix: _APP) - from schema 4
+///////////////////////////////////////////////////////////////////////////////
+
+model CoderRating_APP {
+  id          BigInt   @id @default(autoincrement())
+  coderId     BigInt
+  rating      Int
+  schoolId    BigInt?
+  active      Boolean
+  countryCode String?
+  stateCode   String?
+
+  coder       Coder_APP @relation(fields: [coderId], references: [id])
+
+  @@index([coderId])
+  @@index([schoolId])
+}
+
+model Coder_APP {
+  id          BigInt    @id
+  handle      String?
+  countryCode String?
+  stateCode   String?
+
+  ratings     CoderRating_APP[]
+  submissions Submission_APP[]
+  streakRows  StreakRow_APP[]
+}
+
+model Round_APP {
+  id                 Int      @id
+  name               String?
+  type               RoundType
+  startDate          DateTime?
+  endDate            DateTime?
+  submissions        Submission_APP[]
+  streakRowsStart    StreakRow_APP[] @relation("StreakStartRelation_APP")
+  streakRowsEnd      StreakRow_APP[] @relation("StreakEndRelation_APP")
+}
+
+model Problem_APP {
+  id         Int     @id
+  name       String?
+  roundId    Int
+  round      Round_APP @relation(fields: [roundId], references: [id])
+  statements ProblemStatement_APP[]
+}
+
+model ProblemStatement_APP {
+  id        Int    @id
+  problemId Int
+  text      String
+  problem   Problem_APP @relation(fields: [problemId], references: [id])
+}
+
+model Submission_APP {
+  id        Int      @id @default(autoincrement())
+  coderId   BigInt
+  roundId   Int
+  problemId Int
+  score     Float?
+  time      DateTime?
+  status    SubmissionStatus
+
+  coder     Coder_APP @relation(fields: [coderId], references: [id])
+  round     Round_APP @relation(fields: [roundId], references: [id])
+  problem   Problem_APP @relation(fields: [problemId], references: [id])
+}
+
+model Rating_APP {
+  id         Int       @id @default(autoincrement())
+  coderId    BigInt
+  rating     Int
+  volatility Int?
+  type       RatingType
+  timestamp  DateTime  @default(now())
+
+  coder      Coder_APP @relation(fields: [coderId], references: [id])
+  history    RatingHistory_APP[]
+}
+
+model RatingHistory_APP {
+  id        Int      @id @default(autoincrement())
+  ratingId  Int
+  roundId   Int
+  oldRating Int
+  newRating Int
+  timestamp DateTime @default(now())
+
+  rating    Rating_APP @relation(fields: [ratingId], references: [id])
+  round     Round_APP  @relation(fields: [roundId], references: [id])
+}
+
+model StreakRow_APP {
+  id           Int       @id @default(autoincrement())
+  coderId      BigInt
+  streakType   StreakType
+  startRoundId Int
+  endRoundId   Int
+  length       Int
+  isCurrent    Boolean
+
+  coder        Coder_APP @relation(fields: [coderId], references: [id])
+  startRound   Round_APP @relation("StreakStartRelation_APP", fields: [startRoundId], references: [id])
+  endRound     Round_APP @relation("StreakEndRelation_APP", fields: [endRoundId], references: [id])
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// END OF SCHEMA
+///////////////////////////////////////////////////////////////////////////////
